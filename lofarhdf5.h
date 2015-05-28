@@ -1,4 +1,5 @@
 #include "dragnet.h"
+#include "input.h"
 
 using namespace std;
 #include "dal/lofar/BF_File.h"
@@ -15,7 +16,7 @@ class HDF5 : public Input {
     public:
         HDF5(char *filename, header* h, int verbose=1);
         ~HDF5(); 
-    protected:
+
         int open(char *filename, header* h, int verbose=1);
         int64_t read(int64_t nsamples, int64_t shift_back, header* h, void*& out); // read number of samples
         void close();

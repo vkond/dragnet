@@ -9,17 +9,25 @@ NVCC_FLAGS=-Xcompiler -Wall -O3
 TARGET=dragnet
 all: $(TARGET) strip clean
 
-FILES = $(wildcard *.cu)
-OBJS = $(FILES:.cu=.o)
+HFILES = $(wildcard *.h)
 
-$(TARGET): $(OBJS)
-	$(NVCC) $(NVCC_FLAGS) $(OBJS) -o $@ $(LIBS)
+CFILES = $(wildcard *.cxx)
+OBJS = $(CFILES:.cxx=.o)
 
-%.o : %.cu dragnet.h lofarhdf5.h sigproc.h
+CUFILES = $(wildcard *.cu)
+CUDAOBJS = $(CUFILES:.cu=.obj)
+
+$(TARGET): $(OBJS) $(CUDAOBJS)
+	$(NVCC) $(NVCC_FLAGS) $(OBJS) $(CUDAOBJS) -o $@ $(LIBS)
+
+%.o : %.cxx $(HFILES)
+	$(GXX) $(CFLAGS) $(INCL) $< -o $@
+
+%.obj : %.cu $(HFILES)
 	$(NVCC) $(CFLAGS) $(NVCC_FLAGS) $(INCL) $< -o $@
 
 strip:
 	strip $(TARGET)
 
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJS) $(CUDAOBJS)

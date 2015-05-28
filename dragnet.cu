@@ -11,7 +11,7 @@ int main(int argc,char *argv[])
   header h;
   cmdline opts;
   void *input = 0;
-  Input *raw;  // file descriptor of input raw data
+  void *raw;  // file descriptor of input raw data
   dedisp_float *output=0;
   dedisp_float *dmlist;
   dedisp_plan plan;
@@ -41,19 +41,9 @@ int main(int argc,char *argv[])
   }
   filename = argv[next];
 
-  // checking the data format
-  if ((strcmp(opts.format, "sigproc")) == 0) {
-   // opening the input Sigproc file
-   Sigproc infile = Sigproc(filename, &h, opts.verbose);
-   raw = &infile;
-  } else if ((strcmp(opts.format, "hdf5")) == 0) {
-   // opening the input HDF5 file
-   HDF5 infile = HDF5(filename, &h, opts.verbose);
-   raw = &infile;
-  } else {
-   fprintf(stderr, "ERROR: Can't recognise the format of input data!\n");
-   return -1;
-  }
+  // open the file
+  if (raw_open(filename, opts.format, &h, opts.verbose, raw) != 0) 
+   exit(-1);
 
   // checking the block size
   if (opts.blocksize <= 0 || opts.blocksize > h.nsamp) opts.blocksize = h.nsamp;
@@ -127,7 +117,7 @@ int main(int argc,char *argv[])
 
       to_read = (isamp_computed + opts.blocksize > h.nsamp ? h.nsamp - isamp_computed : opts.blocksize);
       // Reading the input data
-      read_samples = raw->read(to_read, max_delay, &h, input);
+      read_samples = raw_read(to_read, max_delay, &h, input, raw);
 
       // Allocate space for the output data
       output=(dedisp_float *)realloc(output, (to_read - max_delay) * dm_count * nbits/8);
@@ -172,10 +162,10 @@ int main(int argc,char *argv[])
   if (opts.verbose) printf("\nFinish.\n");
 
   // Clean up
-  raw->close();
   if (input != NULL) free(input);
   if (output != NULL) free(output);
   dedisp_destroy_plan(plan);
+  raw_close(raw);
 
   return 0;
 }
