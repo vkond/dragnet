@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <getopt.h>
-#include "dragnet_gpu.h"
+#include "dragnet.h"
 
 // Usage help
 void usage(char *prg) {
@@ -11,6 +11,7 @@ void usage(char *prg) {
  printf(" -h, --help                    This help\n");
  printf(" -q, --quiet                   Quiet; no information to screen\n");
  printf(" -f, --format <string>         Input data format. Possible values are: sigproc, hdf5. Default - sigproc\n");
+ printf(" -b, --blocksize <int>         Maximum number of samples to read at once. Default - whole file\n");
  printf(" -o, --output <prefix>         Output prefix. Default - test\n");
  printf(" -D, --gpu <id>                GPU device number to use. Default - 0\n");
  printf(" -r, --range <startDM,endDM>   Start and end values of DM range to dedisperse. Default - 0,50\n");
@@ -34,10 +35,11 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
                                    {"dmstep", required_argument, 0, 's'},
                                    {"width", required_argument, 0, 'w'},
                                    {"tolerance", required_argument, 0, 't'},
+                                   {"blocksize", required_argument, 0, 'b'},
                                    {0, 0, 0, 0}
                                   };
 
-  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:", long_options, 0)) != EOF)
+  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:", long_options, 0)) != EOF)
     switch(op){
       case 'h':
         usage(argv[0]);
@@ -73,6 +75,10 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
 
       case 't':
         cmd->dm_tol = atof(optarg);
+      break;
+
+      case 'b':
+        cmd->blocksize = strtoull(optarg, NULL, 10);
       break;
 
       case '?':
