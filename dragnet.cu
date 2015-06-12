@@ -40,7 +40,6 @@ int main(int argc,char *argv[])
   strcpy(opts.zapchan, "\0");
   opts.dm_start = 0.0;
   opts.dm_end = 50.0;
-  opts.dm_start = 0.0;
   opts.pulse_width = 4.0;
   opts.dm_tol = 1.25;
   opts.clip_sigma = 0.0;
@@ -97,7 +96,7 @@ int main(int argc,char *argv[])
   }
 
   // Create a dedispersion plan
-  if (opts.verbose) printf("Creating dedispersion plan\n");
+  if (opts.verbose) printf("Creating dedispersion plan...\n");
   error = dedisp_create_plan(&plan, h.nchan, h.tsamp, h.fch1, h.foff);
   if (error != DEDISP_NO_ERROR) {
     printf("ERROR: Could not create dedispersion plan: %s\n", dedisp_get_error_string(error));
@@ -106,19 +105,19 @@ int main(int argc,char *argv[])
 
   // Generate a list of dispersion measures for the plan
   if (opts.dm_step == 0) {
-    if (opts.verbose) printf("Generating optimal DM trials\n");
+    if (opts.verbose) printf("Generating optimal DM trials...\n");
     error = dedisp_generate_dm_list(plan, opts.dm_start, opts.dm_end, opts.pulse_width, opts.dm_tol);
     if (error != DEDISP_NO_ERROR) {
       printf("ERROR: Failed to generate DM list: %s\n", dedisp_get_error_string(error));
       return -1;
     }
   } else {
-    if (opts.verbose) printf("Generating linear DM trials\n");
+    if (opts.verbose) printf("Generating linear DM trials...\n");
     dm_count=(int) ceil((opts.dm_end - opts.dm_start)/opts.dm_step) + 1;
     dmlist=(dedisp_float *) calloc(sizeof(dedisp_float), dm_count);
     for (i=0; i<dm_count; i++) {
       dmlist[i]=(dedisp_float) opts.dm_start + opts.dm_step*i;
-      printf("dm[%d] = %f\n", i, dmlist[i]);
+//      printf("dm[%d] = %f\n", i, dmlist[i]);
     }
     error=dedisp_set_dm_list(plan, dmlist, dm_count);
     if (error != DEDISP_NO_ERROR) {
@@ -150,10 +149,16 @@ int main(int argc,char *argv[])
   nsamp_computed = h.nsamp-max_delay;
   dmlist=(dedisp_float *)dedisp_get_dm_list(plan);
 
+  // checking if our blocksize is smaller than max_delay
+  if (opts.blocksize <= max_delay) {
+      printf("ERROR: input data blocksize (%lld) is smaller than Max DM delay (%ld)!\n", opts.blocksize, max_delay);
+      return -1;
+  }
+
   // Print information
   if (opts.verbose) {
     printf("----------------------------- DM COMPUTATIONS  ----------------------------\n");
-    printf("Computing %ld DMs from %f to %f pc/cm^3\n", dm_count, dmlist[0], dmlist[dm_count-1]);
+    printf("Computing %ld DMs from %f to %f pc/cc\n", dm_count, dmlist[0], dmlist[dm_count-1]);
     printf("Max DM delay is %ld samples (%f seconds)\n", max_delay, max_delay*h.tsamp);
     printf("Computing %ld out of %d total samples (%.2f%% efficiency)\n", nsamp_computed, h.nsamp, 100.0*(dedisp_float)nsamp_computed/h.nsamp);
     if (opts.dm_step==0.0) printf("Pulse width: %f, DM tolerance: %f\n", opts.pulse_width, opts.dm_tol);
@@ -161,9 +166,17 @@ int main(int argc,char *argv[])
     printf("\n");
   }
 
-  printf("Current gulp size = %d\n", (int)dedisp_get_gulp_size(plan));
-  dedisp_set_gulp_size(plan, 8192);
-  printf("Setting gulp size to %d\n", (int)dedisp_get_gulp_size(plan));
+  // Setting maximum gulp_size
+  //dedisp_size gulp_max, gulp_size = dedisp_get_gulp_size(plan);
+  //if (gulp_size < opts.blocksize - max_delay) gulp_max = gulp_size;
+  //else gulp_max = opts.blocksize - max_delay;
+  //printf("Setting gulp_size from %d to %d\n", (int)gulp_size, (int)gulp_max);
+  //error = dedisp_set_gulp_size(plan, gulp_max);
+  printf("Current gulp_size = %d\n", (int)dedisp_get_gulp_size(plan));
+  //if (error != DEDISP_NO_ERROR) {
+  //  printf("ERROR: Failed to set gulp_size: %s\n", dedisp_get_error_string(error));
+  //  return -1;
+  //}
 
   // Loop over data blocks
 
