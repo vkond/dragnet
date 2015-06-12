@@ -20,7 +20,7 @@ void usage(char *prg) {
  printf(" -t, --tolerance <tolerance>   Smearing tolerance factor between DM trials. Default - 1.25\n");
  printf(" -m, --mask <maskfile>         Maskfile *_rfifind.mask to apply\n");
  printf(" -c, --clip <threshold>        Clip all samples above <threshold> in sigmas. Only can be used with --mask. Default - 0 (no clipping)\n");
- printf(" -z, --zapchan <list>          Comma separated string (no spaces!) of channels to explicitly remove from analysis.\n");
+ printf(" -z, --zapchan <channels>      Comma separated string (no spaces!) of channels to explicitly remove from analysis.\n");
  printf("                               Ranges are specified by min:max[:step]. The lower channel number, the lower the frequency\n");
  exit(0);
 }
