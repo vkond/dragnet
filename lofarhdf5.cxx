@@ -124,7 +124,9 @@ int HDF5::open(char *filename, header* h, int verbose) {
 
   // getting the number of subbands
   Attribute<unsigned> nsub = stokes->nofSubbands();
-  if (verbose) { if (nsub.exists()) cerr << "nsub=" << nsub.get() << endl; else cerr << "stokes nofSubbands not defined" << endl; }
+  if (nsub.exists()) {
+   if (verbose) cerr << "nsub=" << nsub.get() << endl;
+  } else { if (verbose) cerr << "stokes nofSubbands not defined" << endl; }
 
   // getting the number of channels for each subband
   Attribute< std::vector<unsigned> > nofchan = stokes->nofChannels();

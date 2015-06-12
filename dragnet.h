@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <dedisp.h>
+#include "mask/mask.h"
 
 #ifndef _HEADER
 #define _HEADER
@@ -27,8 +28,9 @@ typedef struct {
 typedef struct {
  int device_id, verbose;
  unsigned long long blocksize;
- char prefix[128], format[16];
+ char prefix[128], format[16], maskfile[1024], zapchan[1024];
  dedisp_float dm_start, dm_end, dm_step, pulse_width, dm_tol;
+ float clip_sigma;
 } cmdline;
 
 #endif
@@ -47,3 +49,9 @@ void raw_close(void*& fd); // close input file
 void usage(char *prg);
 // parsing command line arguments
 int parse_cmdline(int argc, char *argv[], cmdline* cmd);
+
+/*-- mask/mask.c --*/
+void apply_mask(float* data, header *h, int64_t nsamples, int64_t offset, float clip_sigma, float *padvals, int *maskchans, mask *obsmask);
+
+/*-- mask/range_parse.c --*/
+int *ranges_to_ivect(char *str, int minval, int maxval, int *numvals);

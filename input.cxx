@@ -30,4 +30,3 @@ int64_t raw_read(int64_t nsamples, int64_t shift_back, header* h, void*& out, vo
 void raw_close(void*& fd) {
  ((Input *)fd)->close();
 }
-

@@ -1,6 +1,8 @@
 #include "dragnet.h"
 #include "lofarhdf5.h"
 #include "sigproc.h"
+#include "mask/mask.h"
+#include "mask/vectors.h"
 
 /* ---------- m a i n -----------*/ 
 
@@ -12,13 +14,21 @@ int main(int argc,char *argv[])
   cmdline opts;
   void *input = 0;
   void *raw;  // file descriptor of input raw data
-  dedisp_float *output=0;
+  dedisp_bool *killmask = NULL;
+  dedisp_float *output=0, *finput = 0;
   dedisp_float *dmlist;
   dedisp_plan plan;
-  dedisp_size dm_count, max_delay, nsamp_computed;
+  dedisp_size dm_count, max_delay;
+  int64_t nsamp_computed;
   dedisp_error error;
   dedisp_size nbits = 32;
   char *filename, outname[1024];
+  // rfi masking
+  mask obsmask;  // PRESTO type mask struct
+  unsigned int is_mask_apply = 0;  // if we want to apply the mask
+  float *padvals = NULL;  // padding values for where RFI is (80% of average)
+  int *maskchans = NULL;  // masked channels
+  int numzapchan, *zapchan = NULL; // user-defined list of channels to zap
 
   // initializing cmdline structure
   opts.device_id = 0;
@@ -26,11 +36,14 @@ int main(int argc,char *argv[])
   opts.blocksize = 0;
   strcpy(opts.prefix, "test");
   strcpy(opts.format, "sigproc");
+  strcpy(opts.maskfile, "\0");
+  strcpy(opts.zapchan, "\0");
   opts.dm_start = 0.0;
   opts.dm_end = 50.0;
   opts.dm_start = 0.0;
   opts.pulse_width = 4.0;
   opts.dm_tol = 1.25;
+  opts.clip_sigma = 0.0;
 
   // parsing cmdline
   if (argc == 1) usage(argv[0]);
@@ -44,6 +57,33 @@ int main(int argc,char *argv[])
   // open the file
   if (raw_open(filename, opts.format, &h, opts.verbose, raw) != 0) 
    exit(-1);
+
+  /* Get list of user-zapped channels */
+  if (strcmp(opts.zapchan, "\0") != 0) {
+     zapchan = ranges_to_ivect(opts.zapchan, 0, h.nchan - 1, &numzapchan);
+     printf ("Number of user-defined channels to zap: %d (%s)\n", numzapchan, opts.zapchan);
+  }
+
+  /* Read an input mask if wanted */
+  if (strcmp(opts.maskfile, "\0") != 0) {
+    is_mask_apply = 1;
+    maskchans = gen_ivect(h.nchan);
+    read_mask(opts.maskfile, &obsmask);
+    printf("Read mask information from '%s'\n\n", opts.maskfile);
+    padvals = (float *)malloc(h.nchan * sizeof(float));
+    memset(padvals, 0, h.nchan * sizeof(float));
+    determine_padvals(opts.maskfile, &obsmask, padvals);
+    // inverse channels in the mask
+    inverse_mask(&obsmask, padvals);
+
+    if (h.nbit / 8 == 1) {
+      finput=(dedisp_float *)malloc((opts.blocksize > h.nsamp ? h.nsamp : opts.blocksize) * h.nchan * sizeof(dedisp_float));
+      if (finput==NULL) {
+         fprintf(stderr, "ERROR: Failed to allocate finput array\n");
+         return -1;
+      }
+    }
+   } else { obsmask.numchan = obsmask.numint = 0; }
 
   // checking the block size
   if (opts.blocksize <= 0 || opts.blocksize > h.nsamp) opts.blocksize = h.nsamp;
@@ -73,7 +113,6 @@ int main(int argc,char *argv[])
       return -1;
     }
   } else {
-    // Generate a list of dispersion measures for the plan
     if (opts.verbose) printf("Generating linear DM trials\n");
     dm_count=(int) ceil((opts.dm_end - opts.dm_start)/opts.dm_step) + 1;
     dmlist=(dedisp_float *) calloc(sizeof(dedisp_float), dm_count);
@@ -87,6 +126,23 @@ int main(int argc,char *argv[])
       return -1;
     }
   }
+
+  // zapping given channels using Dedisp's killmask
+  // freq order is: first chan is high freq
+  // VLAD: for whatever reason I couldn't make it work
+  // I tried different freqs order and inversed boolean values (0|1)
+  /*
+  if (strcmp(opts.zapchan, "\0") != 0) {
+    killmask = (dedisp_bool *)malloc(sizeof(dedisp_bool) * h.nchan);
+    memset(killmask, 1, sizeof(dedisp_bool) * h.nchan);
+    for (int jj = 0; jj < numzapchan; jj++) killmask[h.nchan - 1 - zapchan[jj]] = 0;
+    error = dedisp_set_killmask(plan, killmask);
+    if (error != DEDISP_NO_ERROR) {
+      printf("ERROR: Failed to set killmask: %s\n", dedisp_get_error_string(error));
+      return -1;
+    }
+  }
+  */
 
   // Get specifics of the computed dedispersion plan
   dm_count = dedisp_get_dm_count(plan);
@@ -105,11 +161,14 @@ int main(int argc,char *argv[])
     printf("\n");
   }
 
+  printf("Current gulp size = %d\n", (int)dedisp_get_gulp_size(plan));
+  dedisp_set_gulp_size(plan, 8192);
+  printf("Setting gulp size to %d\n", (int)dedisp_get_gulp_size(plan));
+
   // Loop over data blocks
 
   int idata = 0; // loop counter
-  dedisp_size isamp_computed = 0;
-  int64_t read_samples, to_read;
+  int64_t read_samples, to_read, isamp_computed = 0;
   clock_t startclock;
 
   do {
@@ -118,6 +177,27 @@ int main(int argc,char *argv[])
       to_read = (isamp_computed + opts.blocksize > h.nsamp ? h.nsamp - isamp_computed : opts.blocksize);
       // Reading the input data
       read_samples = raw_read(to_read, max_delay, &h, input, raw);
+   
+      // to zap given channels
+      // VLAD: more effectively it would be to use Dedisp's killmask, 
+      // but I couldn't make it work (see above)
+      if (strcmp(opts.zapchan, "\0") != 0) {
+        dedisp_byte *ptr = (dedisp_byte *)input;
+        for (int64_t ii=0; ii<to_read; ii++)
+          for (int jj=0; jj<numzapchan; jj++) ptr[ii * h.nchan + h.nchan - 1 - zapchan[jj]] = 0;
+      }
+
+      // applying rfi mask
+      if (is_mask_apply) {
+          // filling in finput array
+          if (h.nbit / 8 == 1) {
+             dedisp_byte *ptr = (dedisp_byte *)input;
+             // I need to re-arrange the order of channels
+             // as Presto assumed lowest channel to be the first
+             for (int64_t ii = 0; ii<to_read * h.nchan; ii++) finput[ii] = ptr[ii];
+          } else finput = (dedisp_float *)input;
+          apply_mask(finput, &h, to_read, isamp_computed, opts.clip_sigma, padvals, maskchans, &obsmask);
+      }
 
       // Allocate space for the output data
       output=(dedisp_float *)realloc(output, (to_read - max_delay) * dm_count * nbits/8);
@@ -129,7 +209,8 @@ int main(int argc,char *argv[])
       // Perform computation
       if (opts.verbose) printf("Dedispersing on the GPU\n");
       startclock=clock();
-      error = dedisp_execute(plan, to_read, (dedisp_byte *)input, h.nbit, (dedisp_byte *)output, nbits, DEDISP_USE_DEFAULT);
+      error = dedisp_execute(plan, to_read, is_mask_apply == 1 ? (dedisp_byte *)finput : (dedisp_byte *)input, \
+              is_mask_apply == 1 ? 32 : h.nbit, (dedisp_byte *)output, nbits, DEDISP_USE_DEFAULT);
       if (error != DEDISP_NO_ERROR) {
         fprintf(stderr, "ERROR: Failed to execute dedispersion plan: %s\n", dedisp_get_error_string(error));
         return -1;
@@ -162,6 +243,16 @@ int main(int argc,char *argv[])
   if (opts.verbose) printf("\nFinish.\n");
 
   // Clean up
+  if (is_mask_apply) {
+    free(padvals);
+    free_mask(obsmask);
+    vect_free(maskchans);
+    if (h.nbit / 8 == 1) {
+     if (finput != NULL) free(finput);
+    }
+  }
+  if (killmask != NULL) free(killmask);
+  if (zapchan != NULL) free(zapchan);
   if (input != NULL) free(input);
   if (output != NULL) free(output);
   dedisp_destroy_plan(plan);

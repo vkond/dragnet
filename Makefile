@@ -1,33 +1,37 @@
-PREFIX=/home/vlad/pulsar
-DEDISP=$(PREFIX)/src/dedisp-multi
-include $(DEDISP)/Makefile.inc
+include Makefile.inc
 
-LIBS=-L$(PREFIX)/lib -llofardal -lhdf5 -L$(DEDISP)/lib -ldedisp -lm
-INCL=-I$(PREFIX)/include -I. -I$(DEDISP)/include
-CFLAGS=-D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -c -g
-NVCC_FLAGS=-Xcompiler -Wall -O3
+# name of the output binary (i.e. project)
 TARGET=dragnet
+# sub-directories (should be separated by space)
+DIRS = mask
 all: $(TARGET) strip clean
 
-HFILES = $(wildcard *.h)
+DIROBJS = $(DIRS:%=%/*.o)
 
+HFILES = $(wildcard *.h)
 CFILES = $(wildcard *.cxx)
 OBJS = $(CFILES:.cxx=.o)
 
 CUFILES = $(wildcard *.cu)
 CUDAOBJS = $(CUFILES:.cu=.obj)
 
-$(TARGET): $(OBJS) $(CUDAOBJS)
-	$(NVCC) $(NVCC_FLAGS) $(OBJS) $(CUDAOBJS) -o $@ $(LIBS)
+$(TARGET): $(OBJS) $(CUDAOBJS) $(DIRS)
+	$(NVCC) $(NVCC_FLAGS) $(OBJS) $(CUDAOBJS) $(DIROBJS) -o $@ $(LIBS)
 
 %.o : %.cxx $(HFILES)
 	$(GXX) $(CFLAGS) $(INCL) $< -o $@
 
 %.obj : %.cu $(HFILES)
-	$(NVCC) $(CFLAGS) $(NVCC_FLAGS) $(INCL) $< -o $@
+	$(NVCC) $(NVCC_FLAGS) $(CFLAGS) $(INCL) $< -o $@
+
+$(DIRS) : .PHONY
+	@cd $@; $(MAKE) $@ ; cd ..
 
 strip:
 	strip $(TARGET)
 
 clean:
 	rm -f $(OBJS) $(CUDAOBJS)
+	-for d in $(DIRS); do (cd $$d; $(MAKE) clean ); done
+
+.PHONY :

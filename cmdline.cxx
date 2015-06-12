@@ -18,9 +18,12 @@ void usage(char *prg) {
  printf(" -s, --dmstep <DMstep>         Linear DM step to use. If not provided, optimal DM trials are computed\n");
  printf(" -w, --width <pulseWidth>      Expected intrinsic pulse width for optimal DM trials. Default - 4.0us\n");
  printf(" -t, --tolerance <tolerance>   Smearing tolerance factor between DM trials. Default - 1.25\n");
+ printf(" -m, --mask <maskfile>         Maskfile *_rfifind.mask to apply\n");
+ printf(" -c, --clip <threshold>        Clip all samples above <threshold> in sigmas. Only can be used with --mask. Default - 0 (no clipping)\n");
+ printf(" -z, --zapchan <list>          Comma separated string (no spaces!) of channels to explicitly remove from analysis.\n");
+ printf("                               Ranges are specified by min:max[:step]. The lower channel number, the lower the frequency\n");
  exit(0);
 }
-
 
 // parsing command line arguments
 // return value is the index of the first non-option argument (first input file)
@@ -36,10 +39,13 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
                                    {"width", required_argument, 0, 'w'},
                                    {"tolerance", required_argument, 0, 't'},
                                    {"blocksize", required_argument, 0, 'b'},
+                                   {"mask", required_argument, 0, 'm'},
+                                   {"clip", required_argument, 0, 'c'},
+                                   {"zapchan", required_argument, 0, 'z'},
                                    {0, 0, 0, 0}
                                   };
 
-  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:", long_options, 0)) != EOF)
+  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:m:c:z:", long_options, 0)) != EOF)
     switch(op){
       case 'h':
         usage(argv[0]);
@@ -79,6 +85,18 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
 
       case 'b':
         cmd->blocksize = strtoull(optarg, NULL, 10);
+      break;
+
+      case 'm':
+        strcpy(cmd->maskfile, optarg);
+      break;
+
+      case 'c':
+        cmd->clip_sigma = atof(optarg);
+      break;
+
+      case 'z':
+        strcpy(cmd->zapchan, optarg);
       break;
 
       case '?':
