@@ -167,16 +167,16 @@ int main(int argc,char *argv[])
   }
 
   // Setting maximum gulp_size
-  //dedisp_size gulp_max, gulp_size = dedisp_get_gulp_size(plan);
-  //if (gulp_size < opts.blocksize - max_delay) gulp_max = gulp_size;
-  //else gulp_max = opts.blocksize - max_delay;
-  //printf("Setting gulp_size from %d to %d\n", (int)gulp_size, (int)gulp_max);
-  //error = dedisp_set_gulp_size(plan, gulp_max);
-  printf("Current gulp_size = %d\n", (int)dedisp_get_gulp_size(plan));
-  //if (error != DEDISP_NO_ERROR) {
-  //  printf("ERROR: Failed to set gulp_size: %s\n", dedisp_get_error_string(error));
-  //  return -1;
-  //}
+  dedisp_size gulp_max, gulp_size = dedisp_get_gulp_size(plan);
+  if (gulp_size < opts.blocksize - max_delay) gulp_max = gulp_size;
+  else gulp_max = opts.blocksize - max_delay;
+  printf("Setting gulp_size from %d to %d\n", (int)gulp_size, (int)gulp_max);
+  error = dedisp_set_gulp_size(plan, gulp_max);
+  //printf("Current gulp_size = %d\n", (int)dedisp_get_gulp_size(plan));
+  if (error != DEDISP_NO_ERROR) {
+    printf("ERROR: Failed to set gulp_size: %s\n", dedisp_get_error_string(error));
+    return -1;
+  }
 
   // Loop over data blocks
 
