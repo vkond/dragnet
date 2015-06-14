@@ -134,7 +134,14 @@ int main(int argc,char *argv[])
   if (strcmp(opts.zapchan, "\0") != 0) {
     killmask = (dedisp_bool *)malloc(sizeof(dedisp_bool) * h.nchan);
     memset(killmask, 1, sizeof(dedisp_bool) * h.nchan);
-    for (int jj = 0; jj < numzapchan; jj++) killmask[h.nchan - 1 - zapchan[jj]] = 0;
+    // if mask is given then we pad with padding values
+    // padding values are already inversed
+    if (strcmp(opts.maskfile, "\0") != 0) {
+       for (int jj = 0; jj < numzapchan; jj++) killmask[h.nchan - 1 - zapchan[jj]] = padvals[h.nchan - 1 - zapchan[jj]];
+    } else { // if mask is not given, then we do not have padding values 
+             // and will pad with zeroes
+             for (int jj = 0; jj < numzapchan; jj++) killmask[h.nchan - 1 - zapchan[jj]] = 0; 
+            }
     error = dedisp_set_killmask(plan, killmask);
     if (error != DEDISP_NO_ERROR) {
       printf("ERROR: Failed to set killmask: %s\n", dedisp_get_error_string(error));
@@ -196,8 +203,16 @@ int main(int argc,char *argv[])
       // but I couldn't make it work (see above)
       if (strcmp(opts.zapchan, "\0") != 0) {
         dedisp_byte *ptr = (dedisp_byte *)input;
-        for (int64_t ii=0; ii<to_read; ii++)
-          for (int jj=0; jj<numzapchan; jj++) ptr[ii * h.nchan + h.nchan - 1 - zapchan[jj]] = 0;
+        // if mask is given then we pad with padding values
+        // padding values are already inversed
+        if (strcmp(opts.maskfile, "\0") != 0) {
+         for (int64_t ii=0; ii<to_read; ii++)
+           for (int jj=0; jj<numzapchan; jj++) ptr[ii * h.nchan + h.nchan - 1 - zapchan[jj]] = padvals[h.nchan - 1 - zapchan[jj]];
+        } else { // if mask is not given, then we do not have padding values
+                 // and will pad with zeroes
+                 for (int64_t ii=0; ii<to_read; ii++)
+                   for (int jj=0; jj<numzapchan; jj++) ptr[ii * h.nchan + h.nchan - 1 - zapchan[jj]] = 0;
+                }
       }
 
       // applying rfi mask
