@@ -13,6 +13,7 @@ HDF5::HDF5(char *filename, header* h, int verbose) : Input() {
 
 // closing the file
 void HDF5::close() {
+    fd->close();
     if (fd != NULL) delete(fd);
     if (stokes != NULL) delete(stokes);
 }
