@@ -26,11 +26,13 @@ typedef struct {
 #define _CMDLINE
 
 typedef struct {
- int device_id, verbose;
- unsigned long long blocksize;
- char prefix[128], format[16], maskfile[1024], zapchan[1024];
- dedisp_float dm_start, dm_end, dm_step, pulse_width, dm_tol;
- float clip_sigma;
+  int device_id, verbose,useskz;
+  int mskz,nskz;
+  float sskz;
+  unsigned long long blocksize;
+  char prefix[128], format[16], maskfile[1024], zapchan[1024];
+  dedisp_float dm_start, dm_end, dm_step, pulse_width, dm_tol;
+  float clip_sigma;
 } cmdline;
 
 #endif

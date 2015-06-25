@@ -22,6 +22,10 @@ void usage(char *prg) {
  printf(" -c, --clip <threshold>        Clip all samples above <threshold> in sigmas. Only can be used with --mask. Default - 0 (no clipping)\n");
  printf(" -z, --zapchan <channels>      Comma separated string (no spaces!) of channels to explicitly remove from analysis.\n");
  printf("                               Ranges are specified by min:max[:step]. The lower channel number, the lower the frequency\n");
+ printf(" -Z, --skz                     Use Spectral Kurtosis zapping (SKZ). Default - off\n");
+ printf(" -M, --mskz <timesamples>      SKZ block size. Default - 1024\n");
+ printf(" -N, --nskz <averaging>        SKZ Number of averaged spectra. Default - 12\n");
+ printf(" -S, --sskz <sigma>            SKZ sigma cut-off. Default - 4.0\n");
  exit(0);
 }
 
@@ -42,61 +46,81 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
                                    {"mask", required_argument, 0, 'm'},
                                    {"clip", required_argument, 0, 'c'},
                                    {"zapchan", required_argument, 0, 'z'},
+                                   {"skz", no_argument, 0, 'Z'},
+                                   {"mskz", required_argument, 0, 'M'},
+                                   {"nskz", required_argument, 0, 'N'},
+                                   {"sskz", required_argument, 0, 'S'},
                                    {0, 0, 0, 0}
                                   };
 
-  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:m:c:z:", long_options, 0)) != EOF)
+  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:m:c:z:ZM:N:S:", long_options, 0)) != EOF)
     switch(op){
-      case 'h':
-        usage(argv[0]);
+    case 'h':
+      usage(argv[0]);
+      break;
+      
+    case 'q':
+      cmd->verbose = 0;
+      break;
+      
+    case 'f':
+      strcpy(cmd->format, optarg);
+      break;
+      
+    case 'o':
+      strcpy(cmd->prefix, optarg);
+      break;
+      
+    case 'D':
+      cmd->device_id = atoi(optarg);
+      break;
+      
+    case 'r':
+      sscanf(optarg,"%f,%f",&(cmd->dm_start), &(cmd->dm_end));
+      break;
+      
+    case 's':
+      cmd->dm_step = atof(optarg);
+      break;
+      
+    case 'w':
+      cmd->pulse_width = atof(optarg);
+      break;
+      
+    case 't':
+      cmd->dm_tol = atof(optarg);
+      break;
+      
+    case 'b':
+      cmd->blocksize = strtoull(optarg, NULL, 10);
+      break;
+      
+    case 'm':
+      strcpy(cmd->maskfile, optarg);
+      break;
+      
+    case 'c':
+      cmd->clip_sigma = atof(optarg);
+      break;
+      
+    case 'z':
+      strcpy(cmd->zapchan, optarg);
+      break;
+      
+    case 'Z':
+      cmd->useskz=1;
+      break;
+      
+    case 'M':
+      cmd->mskz=atoi(optarg);
       break;
 
-      case 'q':
-	cmd->verbose = 0;
+    case 'N':
+      cmd->nskz=atoi(optarg);
       break;
 
-      case 'f':
-        strcpy(cmd->format, optarg);
-      break;
-
-      case 'o':
-        strcpy(cmd->prefix, optarg);
-      break;
-
-      case 'D':
-        cmd->device_id = atoi(optarg);
-      break;
-
-      case 'r':
-        sscanf(optarg,"%f,%f",&(cmd->dm_start), &(cmd->dm_end));
-      break;
-
-      case 's':
-        cmd->dm_step = atof(optarg);
-      break;
-
-      case 'w':
-        cmd->pulse_width = atof(optarg);
-      break;
-
-      case 't':
-        cmd->dm_tol = atof(optarg);
-      break;
-
-      case 'b':
-        cmd->blocksize = strtoull(optarg, NULL, 10);
-      break;
-
-      case 'm':
-        strcpy(cmd->maskfile, optarg);
-      break;
-
-      case 'c':
-        cmd->clip_sigma = atof(optarg);
-      break;
-
-      case 'z':
-        strcpy(cmd->zapchan, optarg);
+    case 'S':
+      cmd->sskz=atof(optarg);
       break;
 
       case '?':
