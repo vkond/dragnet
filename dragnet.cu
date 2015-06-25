@@ -3,6 +3,7 @@
 #include "sigproc.h"
 #include "mask/mask.h"
 #include "mask/vectors.h"
+#include "skz.h"
 
 /* ---------- m a i n -----------*/ 
 
@@ -29,6 +30,9 @@ int main(int argc,char *argv[])
   float *padvals = NULL;  // padding values for where RFI is (80% of average)
   int *maskchans = NULL;  // masked channels
   int numzapchan, *zapchan = NULL; // user-defined list of channels to zap
+  double sk_lim[2]; // SK limits
+  int mint;
+  int *skmask,nmask;
 
   // initializing cmdline structure
   opts.device_id = 0;
@@ -43,6 +47,10 @@ int main(int argc,char *argv[])
   opts.pulse_width = 4.0;
   opts.dm_tol = 1.25;
   opts.clip_sigma = 0.0;
+  opts.useskz=0;
+  opts.mskz=1024;
+  opts.nskz=12;
+  opts.sskz=4.0;
 
   // parsing cmdline
   if (argc == 1) usage(argv[0]);
@@ -185,6 +193,15 @@ int main(int argc,char *argv[])
     return -1;
   }
 
+  // Compute SK limits
+  if (opts.useskz) {
+    mint=(int) ceil(opts.blocksize/(float) opts.mskz);
+    skmask=(int *) malloc(sizeof(int)*h.nchan*mint);
+    sk_threshold3(opts.mskz,opts.sskz,(float) opts.nskz,sk_lim);
+    printf("Block size: %d, averaged spectra: %g, sigma: %.1f\nSK limits: \
+[%f,%f]\n",opts.mskz,(float) opts.nskz,opts.sskz,sk_lim[0],sk_lim[1]);
+  }
+
   // Loop over data blocks
 
   int idata = 0; // loop counter
@@ -225,6 +242,13 @@ int main(int argc,char *argv[])
              for (int64_t ii = 0; ii<to_read * h.nchan; ii++) finput[ii] = ptr[ii];
           } else finput = (dedisp_float *)input;
           apply_mask(finput, &h, to_read, isamp_computed, opts.clip_sigma, padvals, maskchans, &obsmask);
+      }
+
+      // Apply SK filter
+      if (opts.useskz) {
+	printf("Applying SK filter on %dx%d block\n",to_read,h.nchan);
+	nmask=compute_sk_mask((float *) input,h.nchan,to_read,mint,opts.mskz,(float) opts.nskz,sk_lim[0],sk_lim[1],skmask);
+	printf("Filter applied; %d/%d intervals masked\n",nmask,h.nchan*mint);
       }
 
       // Allocate space for the output data
@@ -283,8 +307,10 @@ int main(int argc,char *argv[])
   if (zapchan != NULL) free(zapchan);
   if (input != NULL) free(input);
   if (output != NULL) free(output);
+  if (skmask != NULL) free(skmask);
   dedisp_destroy_plan(plan);
   raw_close(raw);
+
 
   return 0;
 }
