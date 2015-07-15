@@ -273,7 +273,7 @@ int main(int argc,char *argv[])
 	printf("Applying SK filter on %dx%d block\n",to_read,h.nchan);
 	nmask=compute_sk_mask((float *) input,h.nchan,to_read,mint,opts.mskz,(float) opts.nskz,sk_lim[0],sk_lim[1],skmask);
 	printf("Filter applied; %d/%d intervals masked\n",nmask,h.nchan*mint);
-      if (opts.verbose) printf("SKZ filter took %.2f seconds\n",(double)(clock()-startclock)/CLOCKS_PER_SEC);
+	if (opts.verbose) printf("SKZ filter took %.2f seconds\n",(double)(clock()-startclock)/CLOCKS_PER_SEC);
       }
 
       // Allocate space for the output data
