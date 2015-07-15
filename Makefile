@@ -3,8 +3,8 @@ include Makefile.inc
 # name of the output binary (i.e. project)
 TARGET=dragnet
 # sub-directories (should be separated by space)
-DIRS = mask
-all: $(TARGET) strip clean
+DIRS = mask skz
+all: $(TARGET) strip
 
 DIROBJS = $(DIRS:%=%/*.o)
 

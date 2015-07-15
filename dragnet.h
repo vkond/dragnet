@@ -26,7 +26,7 @@ typedef struct {
 #define _CMDLINE
 
 typedef struct {
-  int device_id, verbose,useskz;
+  int device_id, verbose,useskz,gulp_size,usedt;
   int mskz,nskz;
   float sskz;
   unsigned long long blocksize;

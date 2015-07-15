@@ -22,6 +22,8 @@ void usage(char *prg) {
  printf(" -c, --clip <threshold>        Clip all samples above <threshold> in sigmas. Only can be used with --mask. Default - 0 (no clipping)\n");
  printf(" -z, --zapchan <channels>      Comma separated string (no spaces!) of channels to explicitly remove from analysis.\n");
  printf("                               Ranges are specified by min:max[:step]. The lower channel number, the lower the frequency\n");
+ printf(" -T, --time-scrunching         Enable adaptive time scrunching. Default - off\n");
+ printf(" -g, --gulpsize                Gulp size. Default - 65536\n");
  printf(" -Z, --skz                     Use Spectral Kurtosis zapping (SKZ). Default - off\n");
  printf(" -M, --mskz <timesamples>      SKZ block size. Default - 1024\n");
  printf(" -N, --nskz <averaging>        SKZ Number of averaged spectra. Default - 12\n");
@@ -46,6 +48,8 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
                                    {"mask", required_argument, 0, 'm'},
                                    {"clip", required_argument, 0, 'c'},
                                    {"zapchan", required_argument, 0, 'z'},
+				   {"time-scrunching", no_argument, 0, 'T'},
+				   {"gulpsize", required_argument, 0, 'g'},
                                    {"skz", no_argument, 0, 'Z'},
                                    {"mskz", required_argument, 0, 'M'},
                                    {"nskz", required_argument, 0, 'N'},
@@ -53,7 +57,7 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
                                    {0, 0, 0, 0}
                                   };
 
-  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:m:c:z:ZM:N:S:", long_options, 0)) != EOF)
+  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:m:c:z:g:ZTM:N:S:", long_options, 0)) != EOF)
     switch(op){
     case 'h':
       usage(argv[0]);
@@ -106,7 +110,15 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
     case 'z':
       strcpy(cmd->zapchan, optarg);
       break;
-      
+
+    case 'g':
+      cmd->gulp_size=atoi(optarg);
+      break;
+
+    case 'T':
+      cmd->usedt=1;
+      break;
+
     case 'Z':
       cmd->useskz=1;
       break;

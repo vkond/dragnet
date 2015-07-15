@@ -3,7 +3,7 @@
 #include "sigproc.h"
 #include "mask/mask.h"
 #include "mask/vectors.h"
-#include "skz.h"
+#include "skz/skz.h"
 
 /* ---------- m a i n -----------*/ 
 
@@ -17,9 +17,9 @@ int main(int argc,char *argv[])
   void *raw;  // file descriptor of input raw data
   dedisp_bool *killmask = NULL;
   dedisp_float *output=0, *finput = 0;
-  dedisp_float *dmlist;
+  dedisp_float *dmlist=NULL;
   dedisp_plan plan;
-  dedisp_size dm_count, max_delay;
+  dedisp_size dm_count, max_delay,*dtlist=NULL;
   int64_t nsamp_computed;
   dedisp_error error;
   dedisp_size nbits = 32;
@@ -32,7 +32,7 @@ int main(int argc,char *argv[])
   int numzapchan, *zapchan = NULL; // user-defined list of channels to zap
   double sk_lim[2]; // SK limits
   int mint;
-  int *skmask,nmask;
+  int *skmask=NULL,nmask;
 
   // initializing cmdline structure
   opts.device_id = 0;
@@ -44,6 +44,7 @@ int main(int argc,char *argv[])
   strcpy(opts.zapchan, "\0");
   opts.dm_start = 0.0;
   opts.dm_end = 50.0;
+  opts.dm_step = 0;
   opts.pulse_width = 4.0;
   opts.dm_tol = 1.25;
   opts.clip_sigma = 0.0;
@@ -51,6 +52,8 @@ int main(int argc,char *argv[])
   opts.mskz=1024;
   opts.nskz=12;
   opts.sskz=4.0;
+  opts.gulp_size=65536;
+  opts.usedt=0;
 
   // parsing cmdline
   if (argc == 1) usage(argv[0]);
@@ -134,6 +137,17 @@ int main(int argc,char *argv[])
     }
   }
 
+  // Adaptive time-resolution
+  if (opts.usedt) 
+    error=dedisp_enable_adaptive_dt(plan,opts.pulse_width,opts.dm_tol);
+  else
+    error=dedisp_disable_adaptive_dt(plan);
+  if (error!=DEDISP_NO_ERROR) {
+    printf("\nERROR: Failed to generate DT list: %s\n",dedisp_get_error_string(error));
+    return -1;
+  }
+
+
   // zapping given channels using Dedisp's killmask
   // freq order is: first chan is high freq
   // VLAD: for whatever reason I couldn't make it work
@@ -163,6 +177,13 @@ int main(int argc,char *argv[])
   max_delay = dedisp_get_max_delay(plan);
   nsamp_computed = h.nsamp-max_delay;
   dmlist=(dedisp_float *)dedisp_get_dm_list(plan);
+  dtlist=(dedisp_size *) dedisp_get_dt_factors(plan);
+
+  // Print DM and DT values
+  if (opts.verbose) {
+    for (i=0;i<dm_count;i++)
+      printf("%g %d",dmlist[i],dtlist[i]);
+  }
 
   // checking if our blocksize is smaller than max_delay
   if (opts.blocksize <= max_delay) {
@@ -182,12 +203,8 @@ int main(int argc,char *argv[])
   }
 
   // Setting maximum gulp_size
-  dedisp_size gulp_max, gulp_size = dedisp_get_gulp_size(plan);
-  if (gulp_size < opts.blocksize - max_delay) gulp_max = gulp_size;
-  else gulp_max = opts.blocksize - max_delay;
-  printf("Setting gulp_size from %d to %d\n", (int)gulp_size, (int)gulp_max);
-  error = dedisp_set_gulp_size(plan, gulp_max);
-  //printf("Current gulp_size = %d\n", (int)dedisp_get_gulp_size(plan));
+  error = dedisp_set_gulp_size(plan, opts.gulp_size);
+  printf("Current gulp_size = %d\n", (int)dedisp_get_gulp_size(plan));
   if (error != DEDISP_NO_ERROR) {
     printf("ERROR: Failed to set gulp_size: %s\n", dedisp_get_error_string(error));
     return -1;
@@ -197,6 +214,10 @@ int main(int argc,char *argv[])
   if (opts.useskz) {
     mint=(int) ceil(opts.blocksize/(float) opts.mskz);
     skmask=(int *) malloc(sizeof(int)*h.nchan*mint);
+    if (skmask==NULL) {
+      printf("ERROR: Failed to allocate memory for SK mask\n");
+      return -1;
+    }
     sk_threshold3(opts.mskz,opts.sskz,(float) opts.nskz,sk_lim);
     printf("Block size: %d, averaged spectra: %g, sigma: %.1f\nSK limits: \
 [%f,%f]\n",opts.mskz,(float) opts.nskz,opts.sskz,sk_lim[0],sk_lim[1]);
@@ -211,10 +232,12 @@ int main(int argc,char *argv[])
   do {
       if (opts.verbose) printf("Data block: %d\n", idata);
 
+      startclock=clock();
       to_read = (isamp_computed + opts.blocksize > h.nsamp ? h.nsamp - isamp_computed : opts.blocksize);
       // Reading the input data
       read_samples = raw_read(to_read, max_delay, &h, input, raw);
-   
+      if (opts.verbose) printf("Reading %d bytes took %.2f seconds\n",to_read,(double)(clock()-startclock)/CLOCKS_PER_SEC);
+
       // to zap given channels
       // VLAD: more effectively it would be to use Dedisp's killmask, 
       // but I couldn't make it work (see above)
@@ -246,9 +269,11 @@ int main(int argc,char *argv[])
 
       // Apply SK filter
       if (opts.useskz) {
+	startclock=clock();
 	printf("Applying SK filter on %dx%d block\n",to_read,h.nchan);
 	nmask=compute_sk_mask((float *) input,h.nchan,to_read,mint,opts.mskz,(float) opts.nskz,sk_lim[0],sk_lim[1],skmask);
 	printf("Filter applied; %d/%d intervals masked\n",nmask,h.nchan*mint);
+      if (opts.verbose) printf("SKZ filter took %.2f seconds\n",(double)(clock()-startclock)/CLOCKS_PER_SEC);
       }
 
       // Allocate space for the output data
@@ -308,6 +333,8 @@ int main(int argc,char *argv[])
   if (input != NULL) free(input);
   if (output != NULL) free(output);
   if (skmask != NULL) free(skmask);
+  if (dtlist != NULL) free(dtlist);
+  if (dmlist != NULL) free(dmlist);
   dedisp_destroy_plan(plan);
   raw_close(raw);
 
