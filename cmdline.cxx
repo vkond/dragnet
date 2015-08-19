@@ -16,6 +16,7 @@ void usage(char *prg) {
  printf(" -D, --gpu <id>                GPU device number to use. Default - 0\n");
  printf(" -r, --range <startDM,endDM>   Start and end values of DM range to dedisperse. Default - 0,50\n");
  printf(" -s, --dmstep <DMstep>         Linear DM step to use. If not provided, optimal DM trials are computed\n");
+ printf(" -d, --decim <decimate>        Decimate (downsample) timeseries by this factor. Default - 1\n");
  printf(" -w, --width <pulseWidth>      Expected intrinsic pulse width for optimal DM trials. Default - 4.0us\n");
  printf(" -t, --tolerance <tolerance>   Smearing tolerance factor between DM trials. Default - 1.25\n");
  printf(" -m, --mask <maskfile>         Maskfile *_rfifind.mask to apply\n");
@@ -42,6 +43,7 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
                                    {"gpu", required_argument, 0, 'D'},
                                    {"range", required_argument, 0, 'r'},
                                    {"dmstep", required_argument, 0, 's'},
+				   {"decim", required_argument, 0, 'd'},
                                    {"width", required_argument, 0, 'w'},
                                    {"tolerance", required_argument, 0, 't'},
                                    {"blocksize", required_argument, 0, 'b'},
@@ -57,7 +59,7 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
                                    {0, 0, 0, 0}
                                   };
 
-  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:m:c:z:g:ZTM:N:S:", long_options, 0)) != EOF)
+  while((op = getopt_long(argc, argv, "hqf:o:D:r:s:w:t:b:m:c:z:g:ZTM:N:S:d:", long_options, 0)) != EOF)
     switch(op){
     case 'h':
       usage(argv[0]);
@@ -85,6 +87,10 @@ int parse_cmdline(int argc, char *argv[], cmdline* cmd) {
       
     case 's':
       cmd->dm_step = atof(optarg);
+      break;
+
+    case 'd':
+      cmd->ndec = atoi(optarg);
       break;
       
     case 'w':

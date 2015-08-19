@@ -416,6 +416,27 @@ int sk_threshold6(int M_int, float s_float, float d_float, float sk_lims_float[]
     }
 }
 
+// Decimate the timeseries in time. Reuses input array
+void decimate_timeseries(float *z,int nx,int ny,int mx)
+{
+  int64_t i,j,k,l;
+  int my;
+  float ztmp;
+
+  my=ny/mx;
+
+  for (j=0,l=0;j<ny;j+=mx,l++) {
+    for (i=0;i<nx;i++) {
+      ztmp=0.0;
+      for (k=0;k<mx;k++)
+        ztmp+=z[i+nx*(j+k)];
+      z[i+nx*l]=ztmp/mx;
+    }
+  }
+
+  return;
+}
+
 /* Compute the spectral kurtosis mask. Input is the dynamic spectrum z
    with nx channels and ny time samples.  Output is the integer mask
    of size nx channels and my intervals, where each interval is m time

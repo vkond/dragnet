@@ -54,6 +54,7 @@ int main(int argc,char *argv[])
   opts.sskz=4.0;
   opts.gulp_size=65536;
   opts.usedt=0;
+  opts.ndec=1;
 
   // parsing cmdline
   if (argc == 1) usage(argv[0]);
@@ -67,6 +68,10 @@ int main(int argc,char *argv[])
   // open the file
   if (raw_open(filename, opts.format, &h, opts.verbose, raw) != 0) 
    exit(-1);
+
+  // Adjust nsamp tsamp for decimation factor
+  h.tsamp*=opts.ndec;
+  h.nsamp/=opts.ndec;
 
   /* Get list of user-zapped channels */
   if (strcmp(opts.zapchan, "\0") != 0) {
@@ -196,7 +201,7 @@ int main(int argc,char *argv[])
     printf("----------------------------- DM COMPUTATIONS  ----------------------------\n");
     printf("Computing %ld DMs from %f to %f pc/cc\n", dm_count, dmlist[0], dmlist[dm_count-1]);
     printf("Max DM delay is %ld samples (%f seconds)\n", max_delay, max_delay*h.tsamp);
-    printf("Computing %ld out of %d total samples (%.2f%% efficiency)\n", nsamp_computed, h.nsamp, 100.0*(dedisp_float)nsamp_computed/h.nsamp);
+    printf("Computing %ld out of %d total samples (%.2f%% efficiency)\n", nsamp_computed, h.nsamp, 100.0*(dedisp_float)nsamp_computed/(h.nsamp));
     if (opts.dm_step==0.0) printf("Pulse width: %f, DM tolerance: %f\n", opts.pulse_width, opts.dm_tol);
     printf("Output data array size : %ld MB\n", (dm_count * nsamp_computed * (nbits/8))/(1<<20));
     printf("\n");
@@ -233,10 +238,10 @@ int main(int argc,char *argv[])
       if (opts.verbose) printf("Data block: %d\n", idata);
 
       startclock=clock();
-      to_read = (isamp_computed + opts.blocksize > h.nsamp ? h.nsamp - isamp_computed : opts.blocksize);
+      to_read = (isamp_computed + opts.blocksize > (h.nsamp*opts.ndec) ? (h.nsamp*opts.ndec) - isamp_computed : opts.blocksize);
       // Reading the input data
-      read_samples = raw_read(to_read, max_delay, &h, input, raw);
-      if (opts.verbose) printf("Reading %d bytes took %.2f seconds\n",to_read,(double)(clock()-startclock)/CLOCKS_PER_SEC);
+      read_samples = raw_read(to_read, max_delay*opts.ndec, &h, input, raw);
+      if (opts.verbose) printf("Reading %d MB took %.2f seconds\n",to_read*h.nchan*(h.nbit/8)/(1<<20),(double)(clock()-startclock)/CLOCKS_PER_SEC);
 
       // to zap given channels
       // VLAD: more effectively it would be to use Dedisp's killmask, 
@@ -276,8 +281,15 @@ int main(int argc,char *argv[])
 	if (opts.verbose) printf("SKZ filter took %.2f seconds\n",(double)(clock()-startclock)/CLOCKS_PER_SEC);
       }
 
+      // Decimate timeseries
+      if (opts.ndec>1) {
+	startclock=clock();
+      	decimate_timeseries((float *) input,h.nchan,to_read,opts.ndec);
+	if (opts.verbose) printf("Decimation by factor %d took %.2f seconds\n",opts.ndec,(double)(clock()-startclock)/CLOCKS_PER_SEC);
+      }
+      
       // Allocate space for the output data
-      output=(dedisp_float *)realloc(output, (to_read - max_delay) * dm_count * nbits/8);
+      output=(dedisp_float *)realloc(output, (to_read/opts.ndec - max_delay) * dm_count * nbits/8);
       if (output==NULL) {
         fprintf(stderr, "ERROR: Failed to allocate output array\n");
         return -1;
@@ -286,7 +298,7 @@ int main(int argc,char *argv[])
       // Perform computation
       if (opts.verbose) printf("Dedispersing on the GPU\n");
       startclock=clock();
-      error = dedisp_execute(plan, to_read, is_mask_apply == 1 ? (dedisp_byte *)finput : (dedisp_byte *)input, \
+      error = dedisp_execute(plan, to_read/opts.ndec, is_mask_apply == 1 ? (dedisp_byte *)finput : (dedisp_byte *)input, \
               is_mask_apply == 1 ? 32 : h.nbit, (dedisp_byte *)output, nbits, DEDISP_USE_DEFAULT);
       if (error != DEDISP_NO_ERROR) {
         fprintf(stderr, "ERROR: Failed to execute dedispersion plan: %s\n", dedisp_get_error_string(error));
@@ -304,7 +316,7 @@ int main(int argc,char *argv[])
         }
 
         // Write buffer
-        write(out, output + i*(to_read - max_delay), sizeof(dedisp_float)*(to_read - max_delay));
+        write(out, output + i*(to_read/opts.ndec - max_delay), sizeof(dedisp_float)*(to_read/opts.ndec - max_delay));
     
         // Close file
         close(out);
@@ -332,7 +344,8 @@ int main(int argc,char *argv[])
   if (zapchan != NULL) free(zapchan);
   if (input != NULL) free(input);
   if (output != NULL) free(output);
-  if (skmask != NULL) free(skmask);
+  if (opts.useskz)
+    if (skmask != NULL) free(skmask);
   if (dtlist != NULL) free(dtlist);
   if (dmlist != NULL) free(dmlist);
   dedisp_destroy_plan(plan);

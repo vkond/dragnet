@@ -27,7 +27,7 @@ typedef struct {
 
 typedef struct {
   int device_id, verbose,useskz,gulp_size,usedt;
-  int mskz,nskz;
+  int mskz,nskz,ndec;
   float sskz;
   unsigned long long blocksize;
   char prefix[128], format[16], maskfile[1024], zapchan[1024];
